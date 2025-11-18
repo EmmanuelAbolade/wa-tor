@@ -72,3 +72,150 @@ func NewSimulation(gridSize, numFish, numSharks, fishBreedAge, sharkBreedAge, sh
 
 	return sim
 }
+
+// Step advances the simulation by one chronon
+func (s *Simulation) Step() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.stepFish()
+	s.stepSharks()
+
+	s.Chronon++
+}
+
+// stepFish handles all fish movement and reproduction
+func (s *Simulation) stepFish() {
+	fishToProcess := make([]*Fish, 0, len(s.Fish))
+
+	// Get current list of fish
+	for _, fish := range s.Fish {
+		fishToProcess = append(fishToProcess, fish)
+	}
+
+	for _, fish := range fishToProcess {
+		if _, exists := s.Fish[fish.ID]; !exists {
+			continue // Fish was eaten or removed
+		}
+
+		// Get adjacent empty cells
+		empty, _, _ := s.Grid.GetAdjacentCells(fish.X, fish.Y)
+
+		// Move fish if there's space
+		if len(empty) > 0 {
+			// Choose random empty adjacent cell
+			newPos := empty[rand.Intn(len(empty))]
+
+			// Remove fish from old position
+			s.Grid.SetCell(fish.X, fish.Y, Cell{Type: EMPTY, ID: 0})
+
+			// Move fish to new position
+			fish.X = newPos.x
+			fish.Y = newPos.y
+			s.Grid.SetCell(fish.X, fish.Y, Cell{Type: FISH, ID: fish.ID})
+		}
+
+		// Increase age
+		fish.IncreaseAge()
+
+		// Check if fish can reproduce
+		if fish.CanReproduce(s.FishBreedAge) {
+			// Create offspring at old position
+			newFish := NewFish(s.NextFishID, fish.X, fish.Y, s.FishBreedAge)
+			s.NextFishID++
+			s.Fish[newFish.ID] = newFish
+			s.Grid.SetCell(newFish.X, newFish.Y, Cell{Type: FISH, ID: newFish.ID})
+
+			// Reset parent's age
+			fish.Age = 0
+		}
+	}
+}
+
+// stepSharks handles all shark movement, hunting, starving, and reproduction
+func (s *Simulation) stepSharks() {
+	sharksToProcess := make([]*Shark, 0, len(s.Sharks))
+
+	// Get current list of sharks
+	for _, shark := range s.Sharks {
+		sharksToProcess = append(sharksToProcess, shark)
+	}
+
+	for _, shark := range sharksToProcess {
+		if _, exists := s.Sharks[shark.ID]; !exists {
+			continue // Shark already processed/dead
+		}
+
+		// Get adjacent cells
+		empty, fish, _ := s.Grid.GetAdjacentCells(shark.X, shark.Y)
+
+		// Step 1: Sharks prioritize eating fish
+		if len(fish) > 0 {
+			// Move to a random fish
+			preyPos := fish[rand.Intn(len(fish))]
+			preyCell := s.Grid.GetCell(preyPos.x, preyPos.y)
+
+			// Eat the fish
+			if preyFish, exists := s.Fish[preyCell.ID]; exists {
+				delete(s.Fish, preyFish.ID)
+			}
+
+			// Move shark to fish position
+			s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
+			shark.X = preyPos.x
+			shark.Y = preyPos.y
+			s.Grid.SetCell(shark.X, shark.Y, Cell{Type: SHARK, ID: shark.ID})
+
+			// Eat gives energy
+			shark.Eat(s.EnergyPerFish)
+		} else if len(empty) > 0 {
+			// Step 2: No fish nearby, move to empty space (like a fish)
+			newPos := empty[rand.Intn(len(empty))]
+
+			s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
+			shark.X = newPos.x
+			shark.Y = newPos.y
+			s.Grid.SetCell(shark.X, shark.Y, Cell{Type: SHARK, ID: shark.ID})
+		}
+
+		// Step 3: Shark loses energy each chronon
+		shark.Starve()
+		shark.IncreaseAge()
+
+		// Step 4: Check if shark starves
+		if !shark.IsAlive() {
+			s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
+			delete(s.Sharks, shark.ID)
+			continue
+		}
+
+		// Step 5: Check if shark can reproduce
+		if shark.CanReproduce(s.SharkBreedAge) {
+			// Create offspring at old position
+			newShark := NewShark(s.NextSharkID, shark.X, shark.Y, shark.Energy/2)
+			s.NextSharkID++
+			s.Sharks[newShark.ID] = newShark
+			s.Grid.SetCell(newShark.X, newShark.Y, Cell{Type: SHARK, ID: newShark.ID})
+
+			// Parent's energy splits
+			shark.Energy = shark.Energy / 2
+			shark.Age = 0
+		}
+	}
+}
+
+// GetStats returns current population counts
+func (s *Simulation) GetStats() (chronon int, numFish int, numSharks int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.Chronon, len(s.Fish), len(s.Sharks)
+}
+
+// PrintStats prints current population statistics
+func (s *Simulation) PrintStats() {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	fmt.Printf("Chronon: %d | Fish: %d | Sharks: %d\n", s.Chronon, len(s.Fish), len(s.Sharks))
+}
