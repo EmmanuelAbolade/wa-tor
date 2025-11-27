@@ -73,7 +73,9 @@ func NewSimulation(gridSize, numFish, numSharks, fishBreedAge, sharkBreedAge, sh
 	return sim
 }
 
-// Step advances the simulation by one chronon
+// Step advances the simulation by one chronon using sequential processing.
+// It processes all fish and sharks in turn, updating their positions,
+// energy levels, and reproducing as appropriate.
 func (s *Simulation) Step() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -218,4 +220,19 @@ func (s *Simulation) PrintStats() {
 	defer s.mu.RUnlock()
 
 	fmt.Printf("Chronon: %d | Fish: %d | Sharks: %d\n", s.Chronon, len(s.Fish), len(s.Sharks))
+}
+
+// GetGridCopy returns a snapshot of the grid (for rendering)
+func (s *Simulation) GetGridCopy() [][]Cell {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	copy := make([][]Cell, s.Grid.Size)
+	for i := range copy {
+		copy[i] = make([]Cell, s.Grid.Size)
+		for j := range copy[i] {
+			copy[i][j] = s.Grid.Cells[i][j]
+		}
+	}
+	return copy
 }

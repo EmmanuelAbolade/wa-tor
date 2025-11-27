@@ -4,7 +4,8 @@ import (
 	"sync"
 )
 
-// CellType represents what occupies a grid cell
+// Grid represents the toroidal world of Wa-Tor with thread-safe access.
+// It uses a 2D array of cells and provides synchronized access via RWMutex.
 type CellType int
 
 const (
