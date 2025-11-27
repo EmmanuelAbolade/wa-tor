@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"math/rand"
 	"time"
 
@@ -9,8 +10,6 @@ import (
 	"github.com/abola/wa-tor/simulation"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-
-	"image/color"
 )
 
 // Game represents the simulation game
@@ -45,7 +44,8 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return g.CellSize * g.Display.GridSize, g.CellSize * g.Display.GridSize
 }
 
-func main() {
+// RunGUI starts the graphical interface
+func RunGUI() {
 	// Set random seed
 	rand.Seed(time.Now().UnixNano())
 
