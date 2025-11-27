@@ -19,6 +19,7 @@ type Simulation struct {
 	NextFishID      int
 	NextSharkID     int
 	mu              sync.RWMutex
+	mapMutex        sync.Mutex
 }
 
 // NewSimulation initializes a new simulation

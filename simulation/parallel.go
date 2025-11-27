@@ -56,7 +56,9 @@ func (s *Simulation) StepFishParallel(numThreads int) {
 				if fish.CanReproduce(s.FishBreedAge) {
 					newFish := NewFish(s.NextFishID, fish.X, fish.Y, s.FishBreedAge)
 					s.NextFishID++
+					s.mapMutex.Lock()
 					s.Fish[newFish.ID] = newFish
+					s.mapMutex.Unlock()
 					s.Grid.SetCell(newFish.X, newFish.Y, Cell{Type: FISH, ID: newFish.ID})
 					fish.Age = 0
 				}
@@ -108,7 +110,9 @@ func (s *Simulation) StepSharksParallel(numThreads int) {
 					preyCell := s.Grid.GetCell(preyPos.x, preyPos.y)
 
 					if preyFish, exists := s.Fish[preyCell.ID]; exists {
+						s.mapMutex.Lock()
 						delete(s.Fish, preyFish.ID)
+						s.mapMutex.Unlock()
 					}
 
 					s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
@@ -129,14 +133,18 @@ func (s *Simulation) StepSharksParallel(numThreads int) {
 
 				if !shark.IsAlive() {
 					s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
+					s.mapMutex.Lock()
 					delete(s.Sharks, shark.ID)
+					s.mapMutex.Unlock()
 					continue
 				}
 
 				if shark.CanReproduce(s.SharkBreedAge) {
 					newShark := NewShark(s.NextSharkID, shark.X, shark.Y, shark.Energy/2)
 					s.NextSharkID++
+					s.mapMutex.Lock()
 					s.Sharks[newShark.ID] = newShark
+					s.mapMutex.Unlock()
 					s.Grid.SetCell(newShark.X, newShark.Y, Cell{Type: SHARK, ID: newShark.ID})
 					shark.Energy = shark.Energy / 2
 					shark.Age = 0
