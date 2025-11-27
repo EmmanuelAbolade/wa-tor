@@ -51,11 +51,11 @@ func RunGUI() {
 
 	// Simulation parameters
 	gridSize := 50
-	numFish := 500
-	numSharks := 100
-	fishBreedAge := 4
-	sharkBreedAge := 8
-	sharkStarveTime := 10
+	numFish := 300
+	numSharks := 50
+	fishBreedAge := 8
+	sharkBreedAge := 16
+	sharkStarveTime := 15
 	cellSize := 10
 
 	// Create simulation
