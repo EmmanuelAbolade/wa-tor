@@ -58,7 +58,7 @@ func (s *Simulation) StepFishParallel(numThreads int) {
 				if fish.CanReproduce(s.FishBreedAge) {
 					newFish := NewFish(s.NextFishID, fish.X, fish.Y, s.FishBreedAge)
 					s.NextFishID++
-					s.Fish.Store(newFish.ID, newFish) // Thread-safe store
+					s.Fish.Store(newFish.ID, newFish)
 					s.FishCount.Add(1)
 					s.Grid.SetCell(newFish.X, newFish.Y, Cell{Type: FISH, ID: newFish.ID})
 					fish.Age = 0
@@ -113,7 +113,7 @@ func (s *Simulation) StepSharksParallel(numThreads int) {
 					preyCell := s.Grid.GetCell(preyPos.x, preyPos.y)
 
 					if _, exists := s.Fish.Load(preyCell.ID); exists {
-						s.Fish.Delete(preyCell.ID) // Thread-safe delete
+						s.Fish.Delete(preyCell.ID)
 						s.FishCount.Add(-1)
 					}
 
@@ -135,7 +135,7 @@ func (s *Simulation) StepSharksParallel(numThreads int) {
 
 				if !shark.IsAlive() {
 					s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
-					s.Sharks.Delete(shark.ID) // Thread-safe delete
+					s.Sharks.Delete(shark.ID)
 					s.SharkCount.Add(-1)
 					continue
 				}
@@ -143,7 +143,7 @@ func (s *Simulation) StepSharksParallel(numThreads int) {
 				if shark.CanReproduce(s.SharkBreedAge) {
 					newShark := NewShark(s.NextSharkID, shark.X, shark.Y, shark.Energy/2)
 					s.NextSharkID++
-					s.Sharks.Store(newShark.ID, newShark) // Thread-safe store
+					s.Sharks.Store(newShark.ID, newShark)
 					s.SharkCount.Add(1)
 					s.Grid.SetCell(newShark.X, newShark.Y, Cell{Type: SHARK, ID: newShark.ID})
 					shark.Energy = shark.Energy / 2
@@ -158,8 +158,8 @@ func (s *Simulation) StepSharksParallel(numThreads int) {
 
 // StepParallel advances simulation by one chronon using parallel processing
 func (s *Simulation) StepParallel(numThreads int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
 	if numThreads <= 1 {
 		// Sequential mode

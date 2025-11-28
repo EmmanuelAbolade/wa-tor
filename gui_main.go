@@ -31,10 +31,31 @@ func (g *Game) Update() error {
 // Draw draws the game
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.White)
-	gridCopy := g.Simulation.GetGridCopy()
-	g.Display.DrawGrid(screen, gridCopy)
 
-	// Draw stats on screen
+	// Get grid directly without copying
+	g.Simulation.Mu.RLock()
+	gridSize := g.Simulation.Grid.Size
+	gridCells := g.Simulation.Grid.Cells
+	g.Simulation.Mu.RUnlock()
+
+	// Draw grid cells directly
+	for x := 0; x < gridSize; x++ {
+		for y := 0; y < gridSize; y++ {
+			cell := gridCells[x][y]
+			screenX := x * g.CellSize
+			screenY := y * g.CellSize
+
+			color := g.Display.ColorEmpty
+			if cell.Type == 1 { // FISH
+				color = g.Display.ColorFish
+			} else if cell.Type == 2 { // SHARK
+				color = g.Display.ColorShark
+			}
+			ebitenutil.DrawRect(screen, float64(screenX), float64(screenY), float64(g.CellSize), float64(g.CellSize), color)
+		}
+	}
+
+	// Draw stats
 	chronon, numFish, numSharks := g.Simulation.GetStats()
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("Chronon: %d | Fish: %d | Sharks: %d", chronon, numFish, numSharks))
 }
@@ -53,9 +74,9 @@ func RunGUI() {
 	gridSize := 50
 	numFish := 300
 	numSharks := 50
-	fishBreedAge := 8
-	sharkBreedAge := 16
-	sharkStarveTime := 15
+	fishBreedAge := 12
+	sharkBreedAge := 12
+	sharkStarveTime := 25
 	cellSize := 10
 
 	// Create simulation
@@ -75,6 +96,9 @@ func RunGUI() {
 	// Set window title and size
 	ebiten.SetWindowTitle("Wa-Tor Predator-Prey Simulation")
 	ebiten.SetWindowResizable(false)
+
+	// Set target FPS to keep simulation smooth
+	ebiten.SetTPS(10) // 60 updates per second
 
 	// Run the game
 	if err := ebiten.RunGame(game); err != nil {
