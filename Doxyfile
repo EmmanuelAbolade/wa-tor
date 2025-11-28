@@ -1,0 +1,15 @@
+PROJECT_NAME           = "Wa-Tor Predator-Prey Simulation"
+PROJECT_NUMBER         = 1.0
+PROJECT_BRIEF          = "Concurrent ecological simulation in Go"
+OUTPUT_DIRECTORY       = ./docs
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+INPUT                  = ./simulation ./graphics gui_main.go
+FILE_PATTERNS          = *.go
+RECURSIVE              = YES
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = YES
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES

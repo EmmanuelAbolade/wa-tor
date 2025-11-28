@@ -103,6 +103,32 @@ wa-tor/
 - **Concurrency:** Go routines and sync.RWMutex
 - **Version Control:** Git & GitHub
 
+## Documentation
+
+### Generating Doxygen Documentation
+
+To generate API documentation from the source code comments:
+
+**Prerequisites:**
+- Doxygen must be installed
+
+**Installation:**
+- **Linux/Mac:** Usually pre-installed or `brew install doxygen`
+- **Windows:** Download from https://www.doxygen.nl/download.html
+
+**Generate Documentation:**
+```bash
+doxygen Doxyfile
+```
+
+Documentation will be generated in `docs/html/index.html`. Open this file in a web browser to view the API documentation.
+
+**Project Doxygen Configuration:**
+The `Doxyfile` is configured to extract:
+- All Go source files in `simulation/` and `graphics/` packages
+- Public and private functions/structs
+- All inline documentation comments
+
 ## Future Enhancements
 
 - [ ] Multithreaded simulation for parallel execution
@@ -110,7 +136,7 @@ wa-tor/
 - [ ] Population graph/chart display
 - [ ] Simulation pause/resume controls
 - [ ] Performance benchmarking suite
-
+- [x] Multithreaded simulation for parallel execution (1.70x speedup achieved)
 ## References
 
 - Dewdney, A.K. (1984). Computer Recreations; Sharks and Fish wage an ecological war on the toroidal planet of Wa-Tor - Scientific American, pp. 14-22
