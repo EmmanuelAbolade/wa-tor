@@ -7,12 +7,14 @@ import (
 
 // StepFishParallel processes all fish in parallel using goroutines
 func (s *Simulation) StepFishParallel(numThreads int) {
-	fishList := make([]*Fish, 0, len(s.Fish))
+	fishList := make([]*Fish, 0)
 
-	// Get current list of fish
-	for _, fish := range s.Fish {
+	// Get current list of fish using Range (thread-safe iteration)
+	s.Fish.Range(func(key, value interface{}) bool {
+		fish := value.(*Fish)
 		fishList = append(fishList, fish)
-	}
+		return true
+	})
 
 	// Divide fish into chunks for parallel processing
 	chunkSize := (len(fishList) + numThreads - 1) / numThreads
@@ -33,7 +35,7 @@ func (s *Simulation) StepFishParallel(numThreads int) {
 			for idx := start; idx < end; idx++ {
 				fish := fishList[idx]
 
-				if _, exists := s.Fish[fish.ID]; !exists {
+				if _, exists := s.Fish.Load(fish.ID); !exists {
 					continue
 				}
 
@@ -56,9 +58,8 @@ func (s *Simulation) StepFishParallel(numThreads int) {
 				if fish.CanReproduce(s.FishBreedAge) {
 					newFish := NewFish(s.NextFishID, fish.X, fish.Y, s.FishBreedAge)
 					s.NextFishID++
-					s.mapMutex.Lock()
-					s.Fish[newFish.ID] = newFish
-					s.mapMutex.Unlock()
+					s.Fish.Store(newFish.ID, newFish) // Thread-safe store
+					s.FishCount.Add(1)
 					s.Grid.SetCell(newFish.X, newFish.Y, Cell{Type: FISH, ID: newFish.ID})
 					fish.Age = 0
 				}
@@ -71,12 +72,14 @@ func (s *Simulation) StepFishParallel(numThreads int) {
 
 // StepSharksParallel processes all sharks in parallel using goroutines
 func (s *Simulation) StepSharksParallel(numThreads int) {
-	sharkList := make([]*Shark, 0, len(s.Sharks))
+	sharkList := make([]*Shark, 0)
 
-	// Get current list of sharks
-	for _, shark := range s.Sharks {
+	// Get current list of sharks using Range (thread-safe iteration)
+	s.Sharks.Range(func(key, value interface{}) bool {
+		shark := value.(*Shark)
 		sharkList = append(sharkList, shark)
-	}
+		return true
+	})
 
 	// Divide sharks into chunks for parallel processing
 	chunkSize := (len(sharkList) + numThreads - 1) / numThreads
@@ -97,7 +100,7 @@ func (s *Simulation) StepSharksParallel(numThreads int) {
 			for idx := start; idx < end; idx++ {
 				shark := sharkList[idx]
 
-				if _, exists := s.Sharks[shark.ID]; !exists {
+				if _, exists := s.Sharks.Load(shark.ID); !exists {
 					continue
 				}
 
@@ -109,10 +112,9 @@ func (s *Simulation) StepSharksParallel(numThreads int) {
 					preyPos := fish[rand.Intn(len(fish))]
 					preyCell := s.Grid.GetCell(preyPos.x, preyPos.y)
 
-					if preyFish, exists := s.Fish[preyCell.ID]; exists {
-						s.mapMutex.Lock()
-						delete(s.Fish, preyFish.ID)
-						s.mapMutex.Unlock()
+					if _, exists := s.Fish.Load(preyCell.ID); exists {
+						s.Fish.Delete(preyCell.ID) // Thread-safe delete
+						s.FishCount.Add(-1)
 					}
 
 					s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
@@ -133,18 +135,16 @@ func (s *Simulation) StepSharksParallel(numThreads int) {
 
 				if !shark.IsAlive() {
 					s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
-					s.mapMutex.Lock()
-					delete(s.Sharks, shark.ID)
-					s.mapMutex.Unlock()
+					s.Sharks.Delete(shark.ID) // Thread-safe delete
+					s.SharkCount.Add(-1)
 					continue
 				}
 
 				if shark.CanReproduce(s.SharkBreedAge) {
 					newShark := NewShark(s.NextSharkID, shark.X, shark.Y, shark.Energy/2)
 					s.NextSharkID++
-					s.mapMutex.Lock()
-					s.Sharks[newShark.ID] = newShark
-					s.mapMutex.Unlock()
+					s.Sharks.Store(newShark.ID, newShark) // Thread-safe store
+					s.SharkCount.Add(1)
 					s.Grid.SetCell(newShark.X, newShark.Y, Cell{Type: SHARK, ID: newShark.ID})
 					shark.Energy = shark.Energy / 2
 					shark.Age = 0

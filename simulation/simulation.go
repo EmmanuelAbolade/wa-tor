@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 )
 
 // Simulation represents the entire Wa-Tor world
 type Simulation struct {
 	Grid            *Grid
-	Fish            map[int]*Fish
-	Sharks          map[int]*Shark
+	Fish            sync.Map // Thread-safe map for fish
+	Sharks          sync.Map // Thread-safe map for sharks
 	Chronon         int
 	FishBreedAge    int
 	SharkBreedAge   int
@@ -18,16 +19,15 @@ type Simulation struct {
 	EnergyPerFish   int
 	NextFishID      int
 	NextSharkID     int
-	mu              sync.RWMutex
-	mapMutex        sync.Mutex
+	FishCount       atomic.Int64 // Thread-safe counter for fish
+	SharkCount      atomic.Int64 // Thread-safe counter for sharks
+	mu              sync.RWMutex // Protects Chronon
 }
 
 // NewSimulation initializes a new simulation
 func NewSimulation(gridSize, numFish, numSharks, fishBreedAge, sharkBreedAge, sharkStarveTime int) *Simulation {
 	sim := &Simulation{
 		Grid:            NewGrid(gridSize),
-		Fish:            make(map[int]*Fish),
-		Sharks:          make(map[int]*Shark),
 		Chronon:         0,
 		FishBreedAge:    fishBreedAge,
 		SharkBreedAge:   sharkBreedAge,
@@ -50,7 +50,8 @@ func NewSimulation(gridSize, numFish, numSharks, fishBreedAge, sharkBreedAge, sh
 
 		fish := NewFish(sim.NextFishID, x, y, fishBreedAge)
 		sim.NextFishID++
-		sim.Fish[fish.ID] = fish
+		sim.Fish.Store(fish.ID, fish) // Use Store for sync.Map
+		sim.FishCount.Add(1)          // Increment counter
 		sim.Grid.SetCell(x, y, Cell{Type: FISH, ID: fish.ID})
 	}
 
@@ -67,7 +68,8 @@ func NewSimulation(gridSize, numFish, numSharks, fishBreedAge, sharkBreedAge, sh
 
 		shark := NewShark(sim.NextSharkID, x, y, sharkStarveTime)
 		sim.NextSharkID++
-		sim.Sharks[shark.ID] = shark
+		sim.Sharks.Store(shark.ID, shark) // Use Store for sync.Map
+		sim.SharkCount.Add(1)             // Increment counter
 		sim.Grid.SetCell(x, y, Cell{Type: SHARK, ID: shark.ID})
 	}
 
@@ -89,15 +91,17 @@ func (s *Simulation) Step() {
 
 // stepFish handles all fish movement and reproduction
 func (s *Simulation) stepFish() {
-	fishToProcess := make([]*Fish, 0, len(s.Fish))
+	fishToProcess := make([]*Fish, 0)
 
-	// Get current list of fish
-	for _, fish := range s.Fish {
+	// Get current list of fish using Range (thread-safe iteration)
+	s.Fish.Range(func(key, value interface{}) bool {
+		fish := value.(*Fish)
 		fishToProcess = append(fishToProcess, fish)
-	}
+		return true
+	})
 
 	for _, fish := range fishToProcess {
-		if _, exists := s.Fish[fish.ID]; !exists {
+		if _, exists := s.Fish.Load(fish.ID); !exists {
 			continue // Fish was eaten or removed
 		}
 
@@ -126,7 +130,8 @@ func (s *Simulation) stepFish() {
 			// Create offspring at old position
 			newFish := NewFish(s.NextFishID, fish.X, fish.Y, s.FishBreedAge)
 			s.NextFishID++
-			s.Fish[newFish.ID] = newFish
+			s.Fish.Store(newFish.ID, newFish) // Use Store for sync.Map
+			s.FishCount.Add(1)
 			s.Grid.SetCell(newFish.X, newFish.Y, Cell{Type: FISH, ID: newFish.ID})
 
 			// Reset parent's age
@@ -137,15 +142,17 @@ func (s *Simulation) stepFish() {
 
 // stepSharks handles all shark movement, hunting, starving, and reproduction
 func (s *Simulation) stepSharks() {
-	sharksToProcess := make([]*Shark, 0, len(s.Sharks))
+	sharksToProcess := make([]*Shark, 0)
 
-	// Get current list of sharks
-	for _, shark := range s.Sharks {
+	// Get current list of sharks using Range (thread-safe iteration)
+	s.Sharks.Range(func(key, value interface{}) bool {
+		shark := value.(*Shark)
 		sharksToProcess = append(sharksToProcess, shark)
-	}
+		return true
+	})
 
 	for _, shark := range sharksToProcess {
-		if _, exists := s.Sharks[shark.ID]; !exists {
+		if _, exists := s.Sharks.Load(shark.ID); !exists {
 			continue // Shark already processed/dead
 		}
 
@@ -158,9 +165,10 @@ func (s *Simulation) stepSharks() {
 			preyPos := fish[rand.Intn(len(fish))]
 			preyCell := s.Grid.GetCell(preyPos.x, preyPos.y)
 
-			// Eat the fish
-			if preyFish, exists := s.Fish[preyCell.ID]; exists {
-				delete(s.Fish, preyFish.ID)
+			// Eat the fish (thread-safe delete)
+			if _, exists := s.Fish.Load(preyCell.ID); exists {
+				s.Fish.Delete(preyCell.ID) // Use Delete for sync.Map
+				s.FishCount.Add(-1)
 			}
 
 			// Move shark to fish position
@@ -172,7 +180,7 @@ func (s *Simulation) stepSharks() {
 			// Eat gives energy
 			shark.Eat(s.EnergyPerFish)
 		} else if len(empty) > 0 {
-			// Step 2: No fish nearby, move to empty space (like a fish)
+			// Step 2: No fish nearby, move to empty space
 			newPos := empty[rand.Intn(len(empty))]
 
 			s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
@@ -188,7 +196,8 @@ func (s *Simulation) stepSharks() {
 		// Step 4: Check if shark starves
 		if !shark.IsAlive() {
 			s.Grid.SetCell(shark.X, shark.Y, Cell{Type: EMPTY, ID: 0})
-			delete(s.Sharks, shark.ID)
+			s.Sharks.Delete(shark.ID) // Use Delete for sync.Map
+			s.SharkCount.Add(-1)
 			continue
 		}
 
@@ -197,7 +206,8 @@ func (s *Simulation) stepSharks() {
 			// Create offspring at old position
 			newShark := NewShark(s.NextSharkID, shark.X, shark.Y, shark.Energy/2)
 			s.NextSharkID++
-			s.Sharks[newShark.ID] = newShark
+			s.Sharks.Store(newShark.ID, newShark) // Use Store for sync.Map
+			s.SharkCount.Add(1)
 			s.Grid.SetCell(newShark.X, newShark.Y, Cell{Type: SHARK, ID: newShark.ID})
 
 			// Parent's energy splits
@@ -207,12 +217,12 @@ func (s *Simulation) stepSharks() {
 	}
 }
 
-// GetStats returns current population counts
+// GetStats returns current population counts (thread-safe)
 func (s *Simulation) GetStats() (chronon int, numFish int, numSharks int) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.Chronon, len(s.Fish), len(s.Sharks)
+	return s.Chronon, int(s.FishCount.Load()), int(s.SharkCount.Load())
 }
 
 // PrintStats prints current population statistics
@@ -220,7 +230,7 @@ func (s *Simulation) PrintStats() {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	fmt.Printf("Chronon: %d | Fish: %d | Sharks: %d\n", s.Chronon, len(s.Fish), len(s.Sharks))
+	fmt.Printf("Chronon: %d | Fish: %d | Sharks: %d\n", s.Chronon, int(s.FishCount.Load()), int(s.SharkCount.Load()))
 }
 
 // GetGridCopy returns a snapshot of the grid (for rendering)
