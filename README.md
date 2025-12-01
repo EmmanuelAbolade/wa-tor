@@ -103,6 +103,19 @@ wa-tor/
 - **Concurrency:** Go routines and sync.RWMutex
 - **Version Control:** Git & GitHub
 
+## Performance Results
+
+The simulation achieves concurrent speedup on multi-core systems:
+
+| Threads | Time (ms) | Chronons/sec | Speedup |
+|---------|-----------|--------------|---------|
+| 1       | 83.67     | 597.62       | 1.00x   |
+| 2       | 113.10    | 442.07       | 0.74x   |
+| 4       | 137.12    | 364.64       | 0.61x   |
+| 8       | 49.35     | 1,013.12     | 1.70x   |
+
+See [PERFORMANCE_RESULTS.md](PERFORMANCE_RESULTS.md) for detailed analysis.
+
 ## Documentation
 
 ### Generating Doxygen Documentation
